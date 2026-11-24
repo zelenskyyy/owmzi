@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tic-Tac-Toe — W against L</title>
+<style>
+/* =========================================================
+   1. THEME TOKENS
+   ========================================================= */
+:root {
+  --ink: #24170e;
+  --ink2: #4b3521;
+  --sepia: #7b5b34;
+  --paper: #ead7a2;
+  --red: #a9291f;
+  --blue: #27457e;
+  --p1: #2a1a0f;          /* Player 1 ink: black-brown */
+  --p2: #243d72;          /* Player 2 ink: blue-black  */
+  --mono: "Courier New", Courier, "Lucida Console", monospace;
+  --serif: Georgia, "Times New Roman", serif;
+  --hand: "Segoe Script", "Bradley Hand", "Brush Script MT", "Comic Sans MS", cursive;
+  /* Fallback grain; JS replaces it with an SVG noise texture */
+  --grain: repeating-radial-gradient(circle at 17% 32%, rgba(90,60,20,.05) 0 1px, transparent 1px 3px);
+  --blotch: linear-gradient(transparent, transparent);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+
+/* =========================================================
+   2. DESK + SHEET OF PAPER
+   ========================================================= */
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(10px, 3vw, 36px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  font-family: var(--mono);
+  color: var(--ink);
+  background:
+    repeating-linear-gradient(92deg, rgba(0,0,0,.08) 0 2px, transparent 2px 7px, rgba(255,220,160,.04) 7px 9px, transparent 9px 19px),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 1px, transparent 1px 90px),
+    radial-gradient(ellipse at 50% 25%, #7c5532 0%, #4d311b 60%, #2b1a0e 100%);
+  background-attachment: fixed;
+}
+
+.defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.sheet {
+  position: relative;
+  width: min(100%, 980px);
+  padding: clamp(18px, 3.5vw, 40px) clamp(16px, 3.5vw, 40px) clamp(18px, 3vw, 32px) clamp(40px, 6vw, 72px);
+  border-radius: 3px 7px 4px 9px / 6px 3px 8px 4px;
+  transform: rotate(-0.3deg);
+  overflow: hidden;
+  background:
+    var(--grain),
+    var(--blotch),
+    repeating-linear-gradient(180deg, transparent 0 29px, rgba(60,90,140,.12) 29px 30px),
+    radial-gradient(circle at 14% 8%, rgba(255,251,228,.75), transparent 38%),
+    radial-gradient(ellipse at 92% 6%, rgba(150,100,40,.28), transparent 36%),
+    radial-gradient(ellipse at 4% 96%, rgba(130,85,30,.34), transparent 42%),
+    radial-gradient(ellipse at 98% 98%, rgba(120,78,28,.4), transparent 46%),
+    linear-gradient(180deg, #eedba9 0%, #e5cb8d 100%);
+  box-shadow:
+    inset 0 0 70px rgba(120,70,20,.38),
+    inset 0 0 2px 1px rgba(90,55,15,.5),
+    0 2px 0 rgba(255,255,255,.12),
+    0 24px 50px rgba(0,0,0,.55),
+    0 4px 10px rgba(0,0,0,.4);
+}
+
+/* red notebook margin lines */
+.sheet::before {
+  content: "";
+  position: absolute; top: 0; bottom: 0; left: clamp(26px, 4.4vw, 52px);
+  width: 5px;
+  border-left: 2px solid rgba(169,41,31,.32);
+  border-right: 1px solid rgba(169,41,31,.25);
+  pointer-events: none;
+}
+/* fold creases + edge ageing */
+.sheet::after {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 33%, rgba(70,40,10,.16) 33.15%, rgba(255,255,255,.2) 33.5%, transparent 34.2%),
+    linear-gradient(180deg, transparent 66%, rgba(70,40,10,.14) 66.15%, rgba(255,255,255,.18) 66.5%, transparent 67.2%),
+    radial-gradient(ellipse at center, transparent 55%, rgba(110,60,15,.22) 100%);
+}
+
+.punch {
+  position: absolute; left: clamp(6px, 1.2vw, 14px);
+  width: clamp(12px, 2vw, 18px); aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #2d1a0c, #5a3a1d 70%);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.7), 0 1px 0 rgba(255,255,255,.25);
+  z-index: 1;
+}
+
+.coffee {
+  position: absolute; top: 14%; right: -28px; width: 150px; aspect-ratio: 1; border-radius: 50%;
+  border: 7px solid rgba(110,62,18,.17);
+  background: radial-gradient(circle, rgba(140,85,30,.06) 55%, rgba(120,70,20,.12) 62%, transparent 66%);
+  filter: blur(.6px);
+  transform: rotate(14deg);
+  pointer-events: none;
+}
+.smudge {
+  position: absolute; pointer-events: none; border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(36,23,14,.18), transparent 70%);
+  filter: blur(2px);
+}
+.smudge.s1 { width: 120px; height: 46px; bottom: 7%; left: 11%; transform: rotate(-18deg); }
+.smudge.s2 { width: 70px; height: 70px; top: 46%; right: 3%; opacity: .6; }
+
+.sheet > *:not(.punch):not(.coffee):not(.smudge) { position: relative; z-index: 2; }
+
+/* =========================================================
+   3. LETTERHEAD
+   ========================================================= */
+.letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px;
+  border-bottom: 4px double var(--ink2); }
+.eyebrow { margin: 0 0 6px; font-size: .72rem; letter-spacing: .28em; text-transform: uppercase; color: var(--ink2); }
+h1 {
+  margin: 0; font-family: var(--serif); font-weight: 900; font-style: italic;
+  font-size: clamp(2rem, 7vw, 3.6rem); letter-spacing: .02em; line-height: 1.05;
+  text-shadow: 1px 1px 0 rgba(255,255,255,.3), 0 0 1px var(--ink), 2px 2px 3px rgba(60,30,5,.25);
+}
+.tagline { margin: 8px 0 0; font-size: .95rem; color: var(--ink2); }
+.hand { font-family: var(--hand); color: var(--blue); font-size: 1.15em; display: inline-block; transform: rotate(-2deg); }
+
+.postage {
+  position: absolute !important; top: 0; right: 0; width: 74px; padding: 6px; text-align: center;
+  background: #f4e7bf; border: 4px dotted rgba(60,40,20,.55); transform: rotate(4deg);
+  box-shadow: 0 2px 4px rgba(0,0,0,.25);
+  font-family: var(--serif);
+}
+.postage b { display: block; font-size: 1.35rem; line-height: 1.1; color: var(--red); }
+.postage span { display: block; font-size: .55rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink2); }
+.postmark {
+  position: absolute !important; top: 14px; right: 62px; width: 78px; aspect-ratio: 1; border-radius: 50%;
+  border: 2px solid rgba(36,23,14,.5); display: grid; place-items: center; text-align: center;
+  font-size: .5rem; letter-spacing: .08em; line-height: 1.35; color: rgba(36,23,14,.6);
+  transform: rotate(-14deg); mix-blend-mode: multiply;
+  box-shadow: inset 0 0 0 4px rgba(36,23,14,.0), inset 0 0 0 5px rgba(36,23,14,.25);
+}
+
+/* =========================================================
+   4. LAYOUT
+   ========================================================= */
+.layout {
+  display: grid; gap: clamp(18px, 3vw, 34px);
+  grid-template-columns: 1fr;
+  grid-template-areas: "setup" "play" "tally";
+}
+.setup { grid-area: setup; }
+.play  { grid-area: play; min-width: 0; }
+.tally { grid-area: tally; }
+@media (min-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(300px, 370px) 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "setup play" "tally play";
+    align-items: start;
+  }
+}
+
+.panel { padding: 0; }
+.panel h2 {
+  margin: 0 0 12px; font-size: .85rem; letter-spacing: .24em; text-transform: uppercase;
+  padding-bottom: 5px; border-bottom: 2px solid var(--ink2); color: var(--ink2);
+}
+
+/* =========================================================
+   5. FORM FIELDS (names + starter)
+   ========================================================= */
+.field { position: relative; margin-bottom: 14px; padding: 4px 6px 6px; border-radius: 4px; transition: background .25s; }
+.field label { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink2); }
+.sym { display: inline-block; min-width: 1.5em; padding: 0 .3em; text-align: center; font-weight: 900; font-size: 1rem;
+  border: 2px solid currentColor; border-radius: 3px; letter-spacing: 0; }
+.field[data-p="1"] .sym { color: var(--p1); }
+.field[data-p="2"] .sym { color: var(--p2); }
+.field input[type="text"] {
+  width: 100%; margin-top: 2px; padding: .3rem .25rem; background: transparent;
+  border: 0; border-bottom: 2px dashed var(--ink2); border-radius: 0;
+  font-family: var(--hand); font-size: 1.4rem; color: #1f3a78; outline: none;
+  transition: background .2s, border-color .2s;
+}
+.field input[type="text"]:focus { background: rgba(255,255,255,.28); border-bottom-style: solid; border-color: var(--red); }
+.hand-note {
+  display: none; margin-left: auto; font-family: var(--hand); font-size: 1rem; text-transform: none; letter-spacing: 0;
+  color: var(--red); transform: rotate(-4deg);
+}
+.field.active { background: linear-gradient(90deg, rgba(255,230,120,.35), transparent); }
+.field.active .hand-note { display: inline-block; }
+
+fieldset.starter { margin: 0; padding: 12px 12px 8px; border: 2px solid var(--ink2); border-radius: 3px; }
+fieldset.starter legend { padding: 0 8px; font-size: .78rem; letter-spacing: .16em; text-transform: uppercase; color: var(--ink2); }
+.opt { display: flex; align-items: center; gap: 10px; padding: 6px 4px; cursor: pointer; font-size: .95rem; border-radius: 3px; }
+.opt:hover { background: rgba(255,255,255,.2); }
+.opt input {
+  appearance: none; -webkit-appearance: none; flex: none; position: relative; margin: 0;
+  width: 1.3rem; height: 1.3rem; border: 2px solid var(--ink); border-radius: 2px; background: rgba(255,255,255,.2); cursor: pointer;
+}
+.opt input:checked::after {
+  content: "X"; position: absolute; inset: 0; display: grid; place-items: center;
+  font-weight: 900; font-size: 1.05rem; color: var(--red); animation: tick .22s ease-out;
+}
+.opt input:focus-visible { outline: 3px dashed var(--red); outline-offset: 2px; }
+.fine { margin: 6px 0 2px; font-size: .74rem; font-style: italic; color: var(--ink2); }
+
+/* =========================================================
+   6. TALLY SHEET (scoreboard)
+   ========================================================= */
+.scores { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 3px double var(--ink2); border-bottom: 3px double var(--ink2); }
+.score { padding: 10px 6px 8px; text-align: center; min-width: 0; border-left: 1px dashed var(--ink2); transition: background .25s; }
+.score:first-child { border-left: 0; }
+.score-name { display: block; font-weight: 700; font-size: .85rem; overflow-wrap: anywhere; line-height: 1.2; }
+.score-sub { display: block; font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink2); margin-top: 2px; }
+.score-num { display: block; font-family: var(--serif); font-size: clamp(2rem, 6vw, 2.8rem); line-height: 1.1; margin-top: 4px; }
+.score[data-p="1"] .score-num { color: var(--p1); }
+.score[data-p="2"] .score-num { color: var(--p2); }
+.score-cap { font-size: .65rem; letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
+.score.active { background: linear-gradient(180deg, rgba(255,230,120,.4), transparent); box-shadow: inset 0 -3px 0 var(--red); }
+.score-num.bump { animation: bump .45s ease-out; }
+
+/* =========================================================
+   7. PLAY AREA: status, board, controls
+   ========================================================= */
+.round-line { text-align: center; font-size: .78rem; letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); margin-bottom: 8px; }
+
+.status {
+  display: flex; align-items: center; gap: 14px; min-height: 5.4rem; padding: 10px 12px; margin: 0 auto 16px;
+  width: min(100%, 470px);
+  border: 2px solid var(--ink2); border-radius: 3px;
+  background: rgba(255,250,225,.35);
+  box-shadow: 3px 3px 0 rgba(36,23,14,.25);
+}
+.status-key {
+  flex: none; width: 3.4rem; height: 3.4rem; display: grid; place-items: center;
+  border: 3px solid currentColor; border-radius: 6px; background: rgba(255,255,255,.25);
+  font-weight: 900; font-size: 2.1rem; animation: keyPop .35s cubic-bezier(.2,.9,.3,1.4);
+}
+.status-key[data-p="1"] { color: var(--p1); }
+.status-key[data-p="2"] { color: var(--p2); }
+.status-text { min-width: 0; font-size: 1.05rem; line-height: 1.3; }
+.status-text strong { display: block; overflow-wrap: anywhere; }
+.status-text small { display: block; margin-top: 2px; font-size: .8rem; color: var(--ink2); }
+.caret::after { content: "\2588"; margin-left: 3px; color: var(--ink); animation: blink 1s steps(1) infinite; }
+.status.static .status-key, .status.static .rubber-stamp { animation: none; }
+
+.rubber-stamp {
+  flex: none; display: inline-block; padding: .4rem .65rem; color: var(--red);
+  font-weight: 900; font-size: 1.15rem; letter-spacing: .16em; text-transform: uppercase;
+  border: 3px double currentColor; border-radius: 4px; transform: rotate(-6deg);
+  mix-blend-mode: multiply; filter: url(#inkRough);
+  animation: rubberStamp .55s cubic-bezier(.2,.9,.3,1.3) both;
+}
+.rubber-stamp.draw { color: var(--blue); }
+
+.board-paper {
+  position: relative; width: min(100%, 470px); margin: 0 auto; padding: clamp(10px, 3vw, 18px);
+  transform: rotate(.5deg);
+  background:
+    linear-gradient(rgba(60,90,140,.14) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(90deg, rgba(60,90,140,.14) 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--grain),
+    radial-gradient(ellipse at 20% 10%, rgba(255,252,235,.7), transparent 60%),
+    #f1e3b6;
+  border: 1px solid rgba(90,60,20,.4);
+  box-shadow: inset 0 0 30px rgba(130,85,30,.25), 0 6px 14px rgba(40,20,5,.35);
+}
+.board-paper::before, .board-paper::after {
+  content: ""; position: absolute; width: 74px; height: 24px; top: -11px;
+  background: linear-gradient(180deg, rgba(240,228,180,.75), rgba(215,195,140,.65));
+  border: 1px solid rgba(120,90,40,.25); box-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+.board-paper::before { left: -20px; transform: rotate(-36deg); }
+.board-paper::after  { right: -20px; transform: rotate(36deg); }
+
+.board { position: relative; width: 100%; aspect-ratio: 1; container-type: inline-size; user-select: none; -webkit-user-select: none; }
+.grid-svg, .win-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ink-main { stroke: var(--ink); }
+.ink-ghost { stroke: var(--ink2); opacity: .45; }
+
+.cells { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+.cell {
+  position: relative; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 10px;
+  -webkit-tap-highlight-color: transparent; font-family: var(--mono); color: var(--ink);
+}
+.cell:focus-visible { outline: 3px dashed var(--red); outline-offset: -6px; }
+.cell.filled, .board.over .cell { cursor: not-allowed; }
+.board.over .cell { cursor: default; }
+.cell:not(.filled)::before {
+  content: attr(data-ghost); position: absolute; inset: 0; display: grid; place-items: center;
+  font-weight: 900; font-size: clamp(2.6rem, 14vw, 5rem); font-size: 19cqw; line-height: 1;
+  opacity: 0; transition: opacity .15s; pointer-events: none;
+}
+.board:not(.over) .cell:not(.filled):focus-visible::before { opacity: .16; }
+@media (hover: hover) {
+  .board:not(.over) .cell:not(.filled):hover { background: rgba(255,236,150,.28); }
+  .board:not(.over) .cell:not(.filled):hover::before { opacity: .16; }
+}
+.cell.shake { animation: shake .32s linear; }
+.cell.win { background: radial-gradient(circle, rgba(169,41,31,.12), transparent 70%); }
+
+.mark {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  --rot: 0deg; --dx: 0px; --dy: 0px;
+  font-weight: 900; font-size: clamp(2.6rem, 14vw, 5rem); font-size: 19cqw; line-height: 1;
+  transform: translate(var(--dx), var(--dy)) rotate(var(--rot));
+  text-shadow: 0 0 1px currentColor, 1px 0 0 currentColor, 0 1px 0 currentColor, 1px 2px 4px rgba(36,23,14,.28);
+  animation: stamp .5s cubic-bezier(.2,.9,.3,1) both;
+}
+.mark[data-p="1"] { color: var(--p1); }
+.mark[data-p="2"] { color: var(--p2); }
+.mark span { display: block; filter: url(#inkRough); opacity: .94; }
+.mark::before {
+  content: ""; position: absolute; inset: 0; margin: auto; width: 62%; height: 62%; border-radius: 50%;
+  background: radial-gradient(circle, currentColor 0%, transparent 68%); opacity: 0;
+  animation: bloom .6s ease-out;
+}
+
+.win-svg { mix-blend-mode: multiply; opacity: 0; }
+.win-svg.show { opacity: 1; }
+.win-svg path { fill: none; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.win-svg .red  { stroke: var(--red);  stroke-width: 8; stroke-opacity: .8; }
+.win-svg .blue { stroke: var(--blue); stroke-width: 4; stroke-opacity: .65; }
+.win-svg.by-1 .red  { stroke-width: 11; }
+.win-svg.by-1 .blue { stroke-width: 4; }
+.win-svg.by-2 .blue { stroke-width: 11; }
+.win-svg.by-2 .red  { stroke-width: 4; }
+.win-svg.show path { animation: draw .7s cubic-bezier(.5,.1,.3,1) forwards; }
+.win-svg.show .blue { animation-delay: .14s; }
+
+.board-stamp { position: absolute; inset: 0; display: none; place-items: center; pointer-events: none; }
+.board.is-draw .board-stamp { display: grid; }
+.board-stamp span {
+  padding: .1em .35em; font-weight: 900; font-size: clamp(2rem, 11vw, 3.4rem); font-size: 17cqw; letter-spacing: .12em;
+  color: var(--blue); border: .8cqw double var(--blue); border-radius: 6px; opacity: .55; mix-blend-mode: multiply;
+  transform: rotate(-14deg); filter: url(#inkRough); animation: rubberStamp .6s cubic-bezier(.2,.9,.3,1.3) both;
+}
+
+.controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin: 26px auto 6px; width: min(100%, 470px); }
+
+/* =========================================================
+   8. TACTILE BUTTONS
+   ========================================================= */
+.key {
+  flex: 1 1 auto; font-family: var(--mono); font-weight: 700; font-size: .88rem; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink); padding: .8rem 1rem; cursor: pointer; user-select: none; -webkit-user-select: none;
+  background: radial-gradient(circle at 30% 25%, #fbf0cf, #e1c88e 72%);
+  border: 2px solid var(--ink); border-radius: 12px;
+  box-shadow: 0 5px 0 var(--ink), 0 8px 10px rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.35);
+  transition: transform .08s ease, box-shadow .08s ease, background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .key:hover { transform: translateY(-1px) rotate(-.4deg); background: radial-gradient(circle at 30% 25%, #fff7dc, #ebd49c 72%); }
+}
+.key:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink), 0 2px 3px rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.25); }
+.key:focus-visible { outline: 3px dashed var(--red); outline-offset: 3px; }
+.key.primary {
+  color: #fff4dc; border-color: #3a0f0a;
+  background: radial-gradient(circle at 30% 25%, #de5f52, #a9291f 72%);
+  box-shadow: 0 5px 0 #3a0f0a, 0 8px 10px rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.2);
+}
+.key.primary:active { box-shadow: 0 1px 0 #3a0f0a, 0 2px 3px rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.15); }
+@media (hover: hover) {
+  .key.primary:hover { background: radial-gradient(circle at 30% 25%, #ee7467, #b83227 72%); }
+}
+.key.pulse { animation: pulse 1.3s ease-in-out infinite; }
+.key.armed { border-style: dashed; background: radial-gradient(circle at 30% 25%, #f6c9c2, #e29a8f 72%); }
+.key.muted { border-style: dashed; text-decoration: line-through; opacity: .85; }
+.key.primary { flex-basis: 100%; font-size: 1rem; }
+
+/* =========================================================
+   9. FOOTER
+   ========================================================= */
+footer { margin-top: 26px; padding-top: 12px; border-top: 1px dashed var(--ink2);
+  display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; align-items: baseline; font-size: .72rem; color: var(--ink2); }
+footer .ps { font-family: var(--hand); font-size: 1.1rem; color: var(--blue); transform: rotate(-1deg); }
+
+/* =========================================================
+   10. ANIMATIONS
+   ========================================================= */
+@keyframes stamp {
+  0%   { opacity: 0; transform: translate(var(--dx), calc(var(--dy) - 18px)) rotate(calc(var(--rot) - 10deg)) scale(1.85); filter: blur(4px); }
+  50%  { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(.92); filter: blur(0); }
+  72%  { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1.05); }
+  100% { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); filter: blur(0); }
+}
+@keyframes bloom { 0% { opacity: .38; transform: scale(.3); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes draw { 0% { stroke-dashoffset: 1; opacity: 0; } 8% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes rubberStamp {
+  0%   { opacity: 0; transform: rotate(-6deg) scale(2.2); }
+  60%  { opacity: 1; transform: rotate(-6deg) scale(.92); }
+  100% { opacity: 1; transform: rotate(-6deg) scale(1); }
+}
+@keyframes keyPop { 0% { transform: scale(.6) rotate(-8deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.35) rotate(-4deg); } 100% { transform: scale(1); } }
+@keyframes tick { 0% { transform: scale(2); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+
+/* =========================================================
+   11. RESPONSIVE + ACCESSIBILITY
+   ========================================================= */
+@media (max-width: 600px) {
+  .sheet { transform: none; }
+  .board-paper { transform: none; }
+  .postmark { display: none !important; }
+  .postage { width: 56px; padding: 4px; }
+  .postage b { font-size: 1rem; }
+  .postage span { font-size: .45rem; }
+  .letterhead { padding-right: 56px; padding-left: 8px; }
+  .status { gap: 10px; }
+  .rubber-stamp { font-size: .95rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Hidden SVG filters that give ink a rough, hand-pressed edge -->
+<svg class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="inkRough" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="lineRough" filterUnits="userSpaceOnUse" x="0" y="0" width="300" height="300">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="8" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<main class="sheet">
+  <!-- decorative paper details -->
+  <i class="punch" style="top:14%" aria-hidden="true"></i>
+  <i class="punch" style="top:48%" aria-hidden="true"></i>
+  <i class="punch" style="top:82%" aria-hidden="true"></i>
+  <i class="coffee" aria-hidden="true"></i>
+  <i class="smudge s1" aria-hidden="true"></i>
+  <i class="smudge s2" aria-hidden="true"></i>
+
+  <header class="letterhead">
+    <div class="postmark" aria-hidden="true"><div>PARLOUR<br>POST OFFICE<br>★ 1994 ★</div></div>
+    <div class="postage" aria-hidden="true"><b>W·L</b><span>First Class</span></div>
+    <p class="eyebrow">Parlour Games &amp; Correspondence Co. — Est. 1994</p>
+    <h1>Tic-Tac-Toe</h1>
+    <p class="tagline">A typewritten contest for two &middot; <span class="hand">W against L</span></p>
+  </header>
+
+  <div class="layout">
+
+    <!-- ===== SETUP: names + who starts ===== -->
+    <section class="panel setup" aria-labelledby="setupTitle">
+      <h2 id="setupTitle">Contestants</h2>
+
+      <div class="field" id="field1" data-p="1">
+        <label for="name1">Player 1 <span class="sym" aria-hidden="true">W</span><span class="hand-note">&#9998; your move</span></label>
+        <input id="name1" type="text" maxlength="14" value="Player 1" autocomplete="off" spellcheck="false" aria-label="Player 1 name (plays W)">
+      </div>
+      <div class="field" id="field2" data-p="2">
+        <label for="name2">Player 2 <span class="sym" aria-hidden="true">L</span><span class="hand-note">&#9998; your move</span></label>
+        <input id="name2" type="text" maxlength="14" value="Player 2" autocomplete="off" spellcheck="false" aria-label="Player 2 name (plays L)">
+      </div>
+
+      <fieldset class="starter">
+        <legend>Who stamps first?</legend>
+        <label class="opt"><input type="radio" name="starter" value="p1" checked><span>Player 1 &middot; <b class="nm1">Player 1</b></span></label>
+        <label class="opt"><input type="radio" name="starter" value="p2"><span>Player 2 &middot; <b class="nm2">Player 2</b></span></label>
+        <label class="opt"><input type="radio" name="starter" value="alt"><span>Alternate each round</span></label>
+        <p class="fine" id="starterHint"></p>
+      </fieldset>
+    </section>
+
+    <!-- ===== PLAY AREA ===== -->
+    <section class="play" aria-label="Game">
+      <div class="round-line" id="roundInfo"></div>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+
+      <div class="board-paper">
+        <div class="board" id="board" role="group" aria-label="Tic-tac-toe board">
+          <!-- hand-inked grid -->
+          <svg class="grid-svg" viewBox="0 0 300 300" preserveAspectRatio="none" aria-hidden="true">
+            <g filter="url(#lineRough)" fill="none" stroke-linecap="round">
+              <g class="ink-main" stroke-width="5">
+                <path d="M100 12 Q96 100 101 150 T99 288"/>
+                <path d="M200 10 Q204 90 199 150 T201 290"/>
+                <path d="M10 100 Q100 96 150 101 T290 99"/>
+                <path d="M12 200 Q100 204 150 199 T288 201"/>
+              </g>
+              <g class="ink-ghost" stroke-width="2" transform="translate(2,1.5)">
+                <path d="M100 14 Q98 100 102 150 T100 286"/>
+                <path d="M200 12 Q202 90 198 150 T202 288"/>
+                <path d="M12 100 Q100 98 150 102 T288 100"/>
+                <path d="M14 200 Q100 202 150 198 T286 202"/>
+              </g>
+            </g>
+          </svg>
+          <div class="cells" id="cells"></div>
+          <!-- winning stamped line -->
+          <svg class="win-svg" id="winSvg" viewBox="0 0 300 300" preserveAspectRatio="none" aria-hidden="true">
+            <g filter="url(#lineRough)">
+              <path class="red" id="winRed" pathLength="1" d="M0 0"/>
+              <path class="blue" id="winBlue" pathLength="1" d="M0 0"/>
+            </g>
+          </svg>
+          <div class="board-stamp" aria-hidden="true"><span>DRAW</span></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button type="button" class="key primary" id="newBtn">Restart Round</button>
+        <button type="button" class="key" id="resetBtn">Reset Scores</button>
+        <button type="button" class="key" id="muteBtn" aria-pressed="false">Sound: On</button>
+      </div>
+    </section>
+
+    <!-- ===== SCOREBOARD ===== -->
+    <section class="panel tally" aria-labelledby="tallyTitle">
+      <h2 id="tallyTitle">Tally Sheet</h2>
+      <div class="scores">
+        <div class="score" id="scoreBox1" data-p="1">
+          <span class="score-name nm1">Player 1</span>
+          <span class="score-sub">plays W</span>
+          <strong class="score-num" id="score1">0</strong>
+          <span class="score-cap">wins</span>
+        </div>
+        <div class="score" id="scoreBoxD" data-p="d">
+          <span class="score-name">Draws</span>
+          <span class="score-sub">cat's games</span>
+          <strong class="score-num" id="scoreD">0</strong>
+          <span class="score-cap">ties</span>
+        </div>
+        <div class="score" id="scoreBox2" data-p="2">
+          <span class="score-name nm2">Player 2</span>
+          <span class="score-sub">plays L</span>
+          <strong class="score-num" id="score2">0</strong>
+          <span class="score-cap">wins</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <span class="ps">P.S. three in a row takes the round — press N for a fresh one.</span>
+    <span>Form No. 3&times;3 &middot; printed on recycled paper</span>
+  </footer>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* =========================================================
+     1. CONSTANTS & GAME STATE
+     ========================================================= */
+  const WIN_LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],   // rows
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],   // columns
+    [0, 4, 8], [2, 4, 6]               // diagonals
+  ];
+  const SYMBOL = { 1: 'W', 2: 'L' };
+
+  const state = {
+    board: Array(9).fill(0),   // 0 empty, 1 = Player 1 (W), 2 = Player 2 (L)
+    current: 1,                // whose turn it is
+    starter: 1,                // who opened this round
+    starterMode: 'p1',         // 'p1' | 'p2' | 'alt'
+    round: 1,
+    over: false,
+    result: null,              // { type:'win', player, line } | { type:'draw' }
+    scores: { 1: 0, 2: 0, draws: 0 },
+    names: { 1: 'Player 1', 2: 'Player 2' },
+    muted: false
+  };
+
+  /* =========================================================
+     2. DOM REFERENCES & SMALL HELPERS
+     ========================================================= */
+  const $ = (id) => document.getElementById(id);
+  const dom = {
+    board: $('board'), cellLayer: $('cells'), cells: [],
+    status: $('status'), roundInfo: $('roundInfo'), starterHint: $('starterHint'),
+    winSvg: $('winSvg'), winRed: $('winRed'), winBlue: $('winBlue'),
+    newBtn: $('newBtn'), resetBtn: $('resetBtn'), muteBtn: $('muteBtn'),
+    field: { 1: $('field1'), 2: $('field2') },
+    scoreBox: { 1: $('scoreBox1'), 2: $('scoreBox2'), d: $('scoreBoxD') },
+    scoreNum: { 1: $('score1'), 2: $('score2'), d: $('scoreD') }
+  };
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+  const other = (p) => (p === 1 ? 2 : 1);
+  const hasMoves = () => state.board.some((v) => v !== 0);
+  const rand = (min, max) => Math.random() * (max - min) + min;
+  const fix = (n) => n.toFixed(1);
+
+  function playerName(p) {
+    const v = state.names[p].trim();
+    return v || `Player ${p}`;
+  }
+
+  /* =========================================================
+     3. PAPER TEXTURES (generated SVG noise, no external files)
+     ========================================================= */
+  function initTextures() {
+    const grain =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'>" +
+      "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/>" +
+      "<feColorMatrix values='0 0 0 0 .35  0 0 0 0 .22  0 0 0 0 .08  .8 0 0 0 -.26'/></filter>" +
+      "<rect width='100%' height='100%' filter='url(#n)'/></svg>";
+    const blotch =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='640' height='640'>" +
+      "<filter id='b'><feTurbulence type='fractalNoise' baseFrequency='.011' numOctaves='3' seed='4' stitchTiles='stitch'/>" +
+      "<feColorMatrix values='0 0 0 0 .52  0 0 0 0 .32  0 0 0 0 .1  1.5 0 0 0 -.62'/></filter>" +
+      "<rect width='100%' height='100%' filter='url(#b)'/></svg>";
+    const root = document.documentElement.style;
+    root.setProperty('--grain', `url("data:image/svg+xml,${encodeURIComponent(grain)}")`);
+    root.setProperty('--blotch', `url("data:image/svg+xml,${encodeURIComponent(blotch)}")`);
+  }
+
+  /* =========================================================
+     4. AUDIO — everything synthesised with the Web Audio API
+     ========================================================= */
+  let ctx = null, master = null, noiseBuf = null;
+
+  /** Create / resume the audio context (must follow a user gesture). */
+  function ensureAudio() {
+    if (state.muted) return null;
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try {
+        ctx = new AC();
+        master = ctx.createGain();
+        master.gain.value = 0.85;
+        master.connect(ctx.destination);
+        // 1.5 s of white noise, reused for paper/ink textures
+        noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.5), ctx.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      } catch (e) { ctx = null; return null; }
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  /** Short filtered noise burst — the paper/ink "texture" building block. */
+  function noiseBurst(t, dur, o = {}) {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    const f = ctx.createBiquadFilter();
+    f.type = o.type || 'bandpass';
+    f.frequency.setValueAtTime(o.freq || 1000, t);
+    if (o.freqEnd) f.frequency.exponentialRampToValueAtTime(o.freqEnd, t + dur);
+    f.Q.value = o.q || 1;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(o.gain || 0.3, t + (o.attack || 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t, Math.random() * 0.4);
+    src.stop(t + dur + 0.05);
+  }
+
+  /** Short enveloped oscillator tone. */
+  function tone(t, o) {
+    const osc = ctx.createOscillator();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(o.freq, t);
+    if (o.freqEnd) osc.frequency.exponentialRampToValueAtTime(o.freqEnd, t + o.dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(o.gain || 0.2, t + (o.attack || 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+    osc.connect(g); g.connect(master);
+    osc.start(t);
+    osc.stop(t + o.dur + 0.05);
+  }
+
+  /** Ink stamp thumped onto paper (W / L placement). */
+  function playStamp(p) {
+    if (!ensureAudio()) return;
+    const t = ctx.currentTime;
+    const pitch = p === 1 ? 1 : 0.88;               // slightly different "weight" per player
+    tone(t, { freq: 190 * pitch, freqEnd: 52 * pitch, dur: 0.18, gain: 0.55 });                 // thump
+    tone(t, { freq: 430 * pitch, freqEnd: 120, dur: 0.07, type: 'triangle', gain: 0.18 });       // wooden knock
+    noiseBurst(t, 0.1, { type: 'lowpass', freq: 1500, freqEnd: 450, gain: 0.35 });               // ink squish
+    noiseBurst(t + 0.03, 0.14, { type: 'bandpass', freq: 3400, q: 0.8, gain: 0.11 });            // paper crinkle
+    tone(t, { freq: 1800, freqEnd: 800, dur: 0.025, type: 'square', gain: 0.04 });               // typewriter tick
+  }
+
+  /** Paper rustle + music-box fanfare + typewriter bell. */
+  function playWin(delay = 0) {
+    if (!ensureAudio()) return;
+    const t = ctx.currentTime + delay;
+    noiseBurst(t, 0.55, { freq: 1800, freqEnd: 4200, q: 0.4, gain: 0.09, attack: 0.08 });
+    for (let k = 0; k < 6; k++) {
+      noiseBurst(t + k * 0.07 + rand(0, 0.03), 0.09, { freq: rand(2400, 5000), q: 0.6, gain: 0.13 });
+    }
+    const notes = [523.25, 659.25, 783.99, 1046.5];  // C5 E5 G5 C6
+    notes.forEach((f, i) => {
+      const s = t + 0.16 + i * 0.13;
+      tone(s, { freq: f, dur: 0.55, type: 'triangle', gain: 0.17 });
+      tone(s, { freq: f * 2, dur: 0.3, type: 'sine', gain: 0.05 });
+    });
+    const bell = t + 0.16 + notes.length * 0.13;
+    tone(bell, { freq: 2093, dur: 1.2, gain: 0.12 });
+    tone(bell, { freq: 2093 * 2.01, dur: 0.7, gain: 0.04 });
+    noiseBurst(t + 0.05, 0.18, { type: 'lowpass', freq: 600, gain: 0.2 });
+  }
+
+  /** Sad, slow "wah-wah" slide for a drawn round. */
+  function playDraw(delay = 0) {
+    if (!ensureAudio()) return;
+    const t = ctx.currentTime + delay;
+    tone(t, { freq: 392, freqEnd: 330, dur: 0.34, type: 'triangle', gain: 0.2, attack: 0.03 });
+    tone(t + 0.36, { freq: 330, freqEnd: 247, dur: 0.6, type: 'triangle', gain: 0.2, attack: 0.03 });
+    noiseBurst(t, 0.7, { type: 'lowpass', freq: 900, freqEnd: 250, gain: 0.13, attack: 0.1 });
+    tone(t + 0.95, { freq: 659, dur: 0.7, gain: 0.07 });  // faint, flat little bell
+  }
+
+  /** Soft typewriter-key click for buttons. */
+  function playClick() {
+    if (!ensureAudio()) return;
+    const t = ctx.currentTime;
+    tone(t, { freq: 950, freqEnd: 300, dur: 0.035, type: 'square', gain: 0.05 });
+    noiseBurst(t, 0.04, { freq: 2600, q: 0.8, gain: 0.08 });
+  }
+
+  /** Dull thud for an invalid move. */
+  function playDenied() {
+    if (!ensureAudio()) return;
+    const t = ctx.currentTime;
+    tone(t, { freq: 150, freqEnd: 95, dur: 0.13, type: 'triangle', gain: 0.18 });
+    noiseBurst(t, 0.07, { type: 'lowpass', freq: 500, gain: 0.12 });
+  }
+
+  function toggleMute() {
+    state.muted = !state.muted;
+    if (!state.muted) ensureAudio();
+    if (master) master.gain.setTargetAtTime(state.muted ? 0 : 0.85, ctx.currentTime, 0.01);
+    renderMuteButton();
+    if (!state.muted) playClick();
+  }
+
+  /* =========================================================
+     5. BOARD CONSTRUCTION & MARKS
+     ========================================================= */
+  function buildBoard() {
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < 9; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cell';
+      b.dataset.i = i;
+      dom.cells.push(b);
+      frag.appendChild(b);
+    }
+    dom.cellLayer.appendChild(frag);
+  }
+
+  /** Stamp a W or L into a cell with a slightly random hand-pressed offset. */
+  function placeMark(i, p) {
+    const cell = dom.cells[i];
+    cell.classList.add('filled');
+    cell.setAttribute('aria-disabled', 'true');
+    const mark = el('span', 'mark');
+    mark.dataset.p = p;
+    mark.style.setProperty('--rot', `${rand(-5, 5).toFixed(1)}deg`);
+    mark.style.setProperty('--dx', `${rand(-3, 3).toFixed(1)}px`);
+    mark.style.setProperty('--dy', `${rand(-3, 3).toFixed(1)}px`);
+    mark.appendChild(el('span', '', SYMBOL[p]));
+    cell.appendChild(mark);
+  }
+
+  function clearBoard() {
+    state.board.fill(0);
+    dom.cells.forEach((c) => {
+      c.classList.remove('filled', 'win', 'shake');
+      c.removeAttribute('aria-disabled');
+      c.replaceChildren();
+    });
+    dom.board.classList.remove('over', 'is-draw');
+    dom.winSvg.classList.remove('show', 'by-1', 'by-2');
+  }
+
+  /** Draw the red/blue stamped line over the winning trio. */
+  function drawWinLine(line, player) {
+    const ctr = (i) => ({ x: (i % 3) * 100 + 50, y: Math.floor(i / 3) * 100 + 50 });
+    const a = ctr(line[0]), b = ctr(line[2]);
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+    const ext = 34;
+    const x1 = a.x - ux * ext, y1 = a.y - uy * ext;
+    const x2 = b.x + ux * ext, y2 = b.y + uy * ext;
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const nx = -uy, ny = ux;                       // normal, for a hand-drawn wobble
+    const w1 = rand(-5, 5), w2 = rand(-5, 5);
+    dom.winRed.setAttribute('d',
+      `M${fix(x1)} ${fix(y1)} Q${fix(mx + nx * w1)} ${fix(my + ny * w1)} ${fix(x2)} ${fix(y2)}`);
+    dom.winBlue.setAttribute('d',
+      `M${fix(x1 + 4)} ${fix(y1 + 5)} Q${fix(mx + nx * w2 + 3)} ${fix(my + ny * w2 + 4)} ${fix(x2 + 3)} ${fix(y2 + 4)}`);
+    dom.winSvg.classList.remove('show', 'by-1', 'by-2');
+    void dom.winSvg.getBoundingClientRect();       // restart the draw animation
+    dom.winSvg.classList.add(`by-${player}`, 'show');
+  }
+
+  /* =========================================================
+     6. GAME LOGIC
+     ========================================================= */
+  function findWinLine(p) {
+    return WIN_LINES.find((l) => l.every((i) => state.board[i] === p)) || null;
+  }
+
+  /** Decide who opens a round according to the chosen starter mode. */
+  function pickStarter(advance) {
+    if (state.starterMode === 'p1') return 1;
+    if (state.starterMode === 'p2') return 2;
+    return advance ? other(state.starter) : state.starter;
+  }
+
+  function handleMove(i) {
+    ensureAudio();
+    if (state.over || state.board[i] !== 0) { rejectMove(i); return; }
+
+    const p = state.current;
+    state.board[i] = p;
+    placeMark(i, p);
+    playStamp(p);
+
+    const line = findWinLine(p);
+    if (line) {
+      endRound({ type: 'win', player: p, line });
+    } else if (state.board.every((v) => v !== 0)) {
+      endRound({ type: 'draw' });
+    } else {
+      state.current = other(p);
+    }
+    renderAll();
+  }
+
+  function rejectMove(i) {
+    const cell = dom.cells[i];
+    cell.classList.remove('shake');
+    void cell.offsetWidth;
+    cell.classList.add('shake');
+    playDenied();
+  }
+
+  function endRound(result) {
+    state.over = true;
+    state.result = result;
+    dom.board.classList.add('over');
+    if (result.type === 'win') {
+      state.scores[result.player]++;
+      result.line.forEach((i) => dom.cells[i].classList.add('win'));
+      drawWinLine(result.line, result.player);
+      playWin(0.25);
+      bumpScore(result.player);
+    } else {
+      state.scores.draws++;
+      dom.board.classList.add('is-draw');
+      playDraw(0.25);
+      bumpScore('d');
+    }
+  }
+
+  /** Start another round (Play Again) or restart the one in progress. */
+  function newRound() {
+    if (state.over) {
+      state.round++;
+      state.starter = pickStarter(true);
+    } else {
+      state.starter = pickStarter(false);
+    }
+    clearBoard();
+    state.current = state.starter;
+    state.over = false;
+    state.result = null;
+    renderAll();
+  }
+
+  function resetScores() {
+    state.scores = { 1: 0, 2: 0, draws: 0 };
+    state.round = 1;
+    state.starter = state.starterMode === 'p2' ? 2 : 1;
+    clearBoard();
+    state.current = state.starter;
+    state.over = false;
+    state.result = null;
+    renderAll();
+  }
+
+  function onStarterChange(mode) {
+    state.starterMode = mode;
+    if (!state.over && !hasMoves()) {   // empty board: apply immediately
+      state.starter = pickStarter(false);
+      state.current = state.starter;
+    }
+    renderAll();
+  }
+
+  /* =========================================================
+     7. RENDERING
+     ========================================================= */
+  function renderNames() {
+    document.querySelectorAll('.nm1').forEach((n) => { n.textContent = playerName(1); });
+    document.querySelectorAll('.nm2').forEach((n) => { n.textContent = playerName(2); });
+    renderCellLabels();
+    renderStatus(false);
+    renderRoundInfo();
+  }
+
+  function renderCellLabels() {
+    dom.cells.forEach((c, i) => {
+      const v = state.board[i];
+      const where = `Row ${Math.floor(i / 3) + 1}, column ${(i % 3) + 1}`;
+      c.setAttribute('aria-label', v ? `${where}: ${SYMBOL[v]} by ${playerName(v)}` : `${where}: empty`);
+      c.dataset.ghost = SYMBOL[state.current];
+    });
+  }
+
+  function renderStatus(animate = true) {
+    const s = dom.status;
+    s.replaceChildren();
+    s.classList.toggle('static', !animate);
+    if (!state.over) {
+      const p = state.current;
+      const key = el('span', 'status-key', SYMBOL[p]);
+      key.dataset.p = p;
+      const text = el('span', 'status-text');
+      text.append(
+        el('strong', '', `${playerName(p)}'s turn`),
+        el('small', 'caret', `Stamp a ${SYMBOL[p]} on any empty square`)
+      );
+      s.append(key, text);
+    } else if (state.result.type === 'win') {
+      const p = state.result.player;
+      const text = el('span', 'status-text');
+      text.append(
+        el('strong', '', `${playerName(p)} wins round ${state.round}!`),
+        el('small', '', `Three ${SYMBOL[p]}'s in a row. Press Play Again for the next round.`)
+      );
+      s.append(el('span', 'rubber-stamp', 'Winner'), text);
+    } else {
+      const text = el('span', 'status-text');
+      text.append(
+        el('strong', '', `A draw — nobody wins round ${state.round}`),
+        el('small', '', 'The board is full. Press Play Again for another go.')
+      );
+      s.append(el('span', 'rubber-stamp draw', 'Draw'), text);
+    }
+  }
+
+  function renderRoundInfo() {
+    dom.roundInfo.textContent =
+      `Round ${state.round} \u00B7 ${playerName(state.starter)} opens with ${SYMBOL[state.starter]}`;
+  }
+
+  function renderStarterHint() {
+    const late = state.over || hasMoves();
+    dom.starterHint.textContent = late
+      ? 'Changes take effect from the next round.'
+      : 'Takes effect right away — the board is still clean.';
+  }
+
+  function renderScores() {
+    dom.scoreNum[1].textContent = state.scores[1];
+    dom.scoreNum[2].textContent = state.scores[2];
+    dom.scoreNum.d.textContent = state.scores.draws;
+    [1, 2].forEach((p) => {
+      const active = !state.over && state.current === p;
+      dom.scoreBox[p].classList.toggle('active', active);
+      dom.field[p].classList.toggle('active', active);
+    });
+  }
+
+  function bumpScore(key) {
+    const n = dom.scoreNum[key];
+    n.classList.remove('bump');
+    void n.offsetWidth;
+    n.classList.add('bump');
+  }
+
+  function renderButtons() {
+    dom.newBtn.textContent = state.over ? '\u25B6 Play Again' : '\u21BB Restart Round';
+    dom.newBtn.classList.toggle('pulse', state.over);
+  }
+
+  function renderMuteButton() {
+    dom.muteBtn.textContent = state.muted ? 'Sound: Off' : 'Sound: On';
+    dom.muteBtn.classList.toggle('muted', state.muted);
+    dom.muteBtn.setAttribute('aria-pressed', String(state.muted));
+  }
+
+  function renderAll() {
+    renderNames();
+    renderStatus(true);
+    renderRoundInfo();
+    renderStarterHint();
+    renderScores();
+    renderButtons();
+    renderCellLabels();
+  }
+
+  /* =========================================================
+     8. EVENT WIRING
+     ========================================================= */
+  function bindEvents() {
+    // Unlock audio on the first interaction of any kind
+    ['pointerdown', 'keydown'].forEach((ev) =>
+      document.addEventListener(ev, ensureAudio, { passive: true }));
+
+    // Board clicks (event delegation)
+    dom.board.addEventListener('click', (e) => {
+      const cell = e.target.closest('.cell');
+      if (cell) handleMove(Number(cell.dataset.i));
+    });
+
+    // Arrow-key navigation around the board
+    dom.board.addEventListener('keydown', (e) => {
+      const cell = e.target.closest('.cell');
+      if (!cell) return;
+      const i = Number(cell.dataset.i);
+      const r = Math.floor(i / 3), c = i % 3;
+      let next = null;
+      if (e.key === 'ArrowRight' && c < 2) next = i + 1;
+      else if (e.key === 'ArrowLeft' && c > 0) next = i - 1;
+      else if (e.key === 'ArrowDown' && r < 2) next = i + 3;
+      else if (e.key === 'ArrowUp' && r > 0) next = i - 3;
+      if (next !== null) { e.preventDefault(); dom.cells[next].focus(); }
+    });
+
+    // Name inputs update everywhere as you type
+    [1, 2].forEach((p) => {
+      const input = $(`name${p}`);
+      state.names[p] = input.value;
+      input.addEventListener('input', () => { state.names[p] = input.value; renderNames(); });
+      input.addEventListener('focus', () => input.select());
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+    });
+
+    // Who starts
+    document.querySelectorAll('input[name="starter"]').forEach((r) =>
+      r.addEventListener('change', () => { if (r.checked) { playClick(); onStarterChange(r.value); } }));
+
+    // Buttons
+    dom.newBtn.addEventListener('click', () => { playClick(); newRound(); });
+    dom.muteBtn.addEventListener('click', toggleMute);
+
+    // Reset Scores asks for a second click so a stray tap can't wipe the ledger
+    let armed = false, timer = null;
+    const disarm = () => {
+      armed = false; clearTimeout(timer);
+      dom.resetBtn.textContent = 'Reset Scores';
+      dom.resetBtn.classList.remove('armed');
+    };
+    dom.resetBtn.addEventListener('click', () => {
+      playClick();
+      const hasScores = state.scores[1] + state.scores[2] + state.scores.draws > 0;
+      if (hasScores && !armed) {
+        armed = true;
+        dom.resetBtn.textContent = 'Sure? Click again';
+        dom.resetBtn.classList.add('armed');
+        timer = setTimeout(disarm, 3000);
+      } else {
+        disarm();
+        resetScores();
+      }
+    });
+
+    // "N" = next round (ignored while typing a name)
+    document.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() !== 'n' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target.matches('input[type="text"]')) return;
+      newRound();
+    });
+  }
+
+  /* =========================================================
+     9. START
+     ========================================================= */
+  function init() {
+    initTextures();
+    buildBoard();
+    bindEvents();
+    renderMuteButton();
+    renderAll();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
